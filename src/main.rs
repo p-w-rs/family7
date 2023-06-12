@@ -53,15 +53,20 @@ async fn assets(file: PathBuf) -> Option<NamedFile> {
     NamedFile::open(Path::new("./static/assets/").join(file)).await.ok()
 }
 
-#[post("/new_resume/<name>/<email>/<other>", format = "application/pdf", data = "<file>")]
-async fn new_resume(name: &str, email: &str, other: &str, mut file: TempFile<'_>) -> status::Accepted<String> {
+#[post("/new_candidate/<name>/<email>/<other>", format = "application/pdf", data = "<file>")]
+async fn new_candidate(name: &str, email: &str, other: &str, mut file: TempFile<'_>) -> status::Accepted<String> {
     file.persist_to(Path::new(
         &format!("./.data/resumes/{}.pdf", 0)
     )).await.ok();
     status::Accepted(Some(format!("Thank You!")))
 }
 
+#[post("/drop_candidate/<id>")]
+async fn drop_candidate(id: u64) -> status::Accepted<String> {
+    status::Accepted(Some(format!("Thank You!")))
+}
+
 #[launch]
 fn rocket() -> _ {
-    rocket::build().attach(Cors).mount("/", routes![index, index_route, files, assets, new_resume])
+    rocket::build().attach(Cors).mount("/", routes![index, index_route, files, assets, new_candidate])
 }
