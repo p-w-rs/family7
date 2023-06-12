@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_variables)]
 #![allow(unused_imports)]
+#![allow(unused_mut)]
 #[macro_use] extern crate rocket;
 
 use std::path::{Path, PathBuf};
@@ -52,12 +53,12 @@ async fn assets(file: PathBuf) -> Option<NamedFile> {
     NamedFile::open(Path::new("./static/assets/").join(file)).await.ok()
 }
 
-#[post("/new_resume/<name>/<email>/<other>")]
-async fn new_resume(name: &str, email: &str, other: &str) -> status::Accepted<String> {
-    println!("{}", name);
-    println!("{}", email);
-    println!("{}", other);
-    status::Accepted(Some("Thank You!".to_string()))
+#[post("/new_resume/<name>/<email>/<other>", format = "application/pdf", data = "<file>")]
+async fn new_resume(name: &str, email: &str, other: &str, mut file: TempFile<'_>) -> status::Accepted<String> {
+    file.persist_to(Path::new(
+        &format!("./.data/resumes/{}.pdf", 0)
+    )).await.ok();
+    status::Accepted(Some(format!("Thank You!")))
 }
 
 #[launch]
