@@ -2,6 +2,7 @@
 
 use std::path::{Path, PathBuf};
 use rocket::fs::NamedFile;
+use rocket::response::status;
 
 #[get("/")]
 async fn index() -> Option<NamedFile> {
@@ -23,7 +24,12 @@ async fn assets(file: PathBuf) -> Option<NamedFile> {
     NamedFile::open(Path::new("./static/assets/").join(file)).await.ok()
 }
 
+#[post("/new_resume")]
+async fn new_resume() -> status::Accepted<String> {
+    status::Accepted(Some("Thank You!".to_string()))
+}
+
 #[launch]
 fn rocket() -> _ {
-    rocket::build().mount("/", routes![index, index_route, files, assets])
+    rocket::build().mount("/", routes![index, index_route, files, assets, new_resume])
 }

@@ -3,15 +3,17 @@ module Main exposing (main)
 import Array
 import Browser
 import Browser.Navigation as Nav
-import Bytes exposing (Bytes)
+import Debug exposing (log)
 import Element exposing (..)
 import Element.Background as Back
 import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
+import Email exposing (isValid)
 import File exposing (File)
 import File.Select as Select
+import Http
 import Task
 import Url
 
@@ -68,13 +70,15 @@ type alias Model =
     , email : String
     , other : String
     , resName : String
-    , resume : Maybe Bytes
+    , resume : Maybe File
+    , error : Maybe Bool
+    , stuff : Maybe String
     }
 
 
 init : () -> Url.Url -> Nav.Key -> ( Model, Cmd Msg )
 init flags url key =
-    ( Model key url 0 "" "" "" "" Nothing
+    ( Model key url 0 "" "" "" "" Nothing Nothing Nothing
     , Cmd.none
     )
 
@@ -91,8 +95,18 @@ type Msg
     | SetEmail String
     | SetOther String
     | ResumeRequested
-    | ResumeSelected File
-    | ResumeLoaded Bytes
+    | ResumeLoaded File
+    | Upload
+    | Uploaded (Result Http.Error String)
+
+
+upload : File.File -> Cmd Msg
+upload file =
+    Http.post
+        { url = "http://127.0.0.1:8000/new_resume"
+        , body = Http.fileBody file
+        , expect = Http.expectString Uploaded
+        }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -133,18 +147,47 @@ update msg model =
 
         ResumeRequested ->
             ( model
-            , Select.file [ "application/pdf" ] ResumeSelected
+            , Select.file [ "application/pdf" ] ResumeLoaded
             )
 
-        ResumeSelected file ->
-            ( model
-            , Task.perform ResumeLoaded (File.toBytes file)
-            )
-
-        ResumeLoaded content ->
-            ( { model | resume = Just content }
+        ResumeLoaded file ->
+            ( { model | resName = File.name file, resume = Just file }
             , Cmd.none
             )
+
+        Upload ->
+            let
+                validForm =
+                    not (model.name == "" || model.resName == "") && isValid model.email
+            in
+            case ( validForm, model.resume ) of
+                ( True, Just resume ) ->
+                    ( model, upload resume )
+
+                _ ->
+                    ( { model | error = Just True }, Cmd.none )
+
+        Uploaded result ->
+            case result of
+                Ok str ->
+                    ( { model | stuff = Just str, error = Just False, name = "", email = "", other = "", resName = "", resume = Nothing }, Cmd.none )
+
+                Err err ->
+                    case err of
+                        Http.BadUrl url ->
+                            ( { model | stuff = Just url, error = Just True }, Cmd.none )
+
+                        Http.Timeout ->
+                            ( { model | stuff = Just "timeout", error = Just True }, Cmd.none )
+
+                        Http.NetworkError ->
+                            ( { model | stuff = Just "network error", error = Just True }, Cmd.none )
+
+                        Http.BadStatus _ ->
+                            ( { model | stuff = Just "bad status", error = Just True }, Cmd.none )
+
+                        Http.BadBody _ ->
+                            ( { model | stuff = Just "bad body", error = Just True }, Cmd.none )
 
 
 
@@ -190,6 +233,10 @@ green =
 
 darkGreen =
     rgba (51 / 255) (85 / 255) (79 / 255) 1.0
+
+
+red =
+    rgba (255 / 255) (87 / 255) (51 / 255) 1.0
 
 
 hide n =
@@ -306,8 +353,8 @@ view model =
     , body =
         [ layout []
             (column [ width fill, Back.color offWhite ]
-                [ --el [] (Url.toString model.url |> text),
-                  navbar (String.dropLeft 1 model.url.path)
+                [ el [] (Maybe.withDefault "nothing" model.stuff |> text)
+                , navbar (String.dropLeft 1 model.url.path)
                 , page
                 , footer
                 ]
@@ -482,6 +529,15 @@ input_form msg typedtext holdertext labeltext =
         }
 
 
+email_form msg typedtext holdertext labeltext =
+    Input.email []
+        { onChange = msg
+        , text = typedtext
+        , placeholder = Just <| Input.placeholder [ Font.italic ] (text holdertext)
+        , label = Input.labelAbove [] (text labeltext)
+        }
+
+
 input_multi msg typedtext holdertext labeltext =
     Input.multiline []
         { onChange = msg
@@ -492,6 +548,29 @@ input_multi msg typedtext holdertext labeltext =
         }
 
 
+selectedFile name file =
+    case file of
+        Nothing ->
+            el [] none
+
+        Just _ ->
+            el [ moveLeft 15, padding 10 ] (text name)
+
+
+submitMessage error =
+    case error of
+        Nothing ->
+            el [] none
+
+        Just bool ->
+            case bool of
+                False ->
+                    el [ moveLeft 15, padding 10, Font.color lightGreen ] (text "Submission Success!")
+
+                True ->
+                    el [ moveLeft 15, padding 10, Font.color red, Font.alignLeft ] (text "Submission Error...\nCheck Form And Try Again.")
+
+
 careers : Model -> Element Msg
 careers model =
     column [ width fill, spacing 50, paddingXY 35 50 ]
@@ -499,14 +578,23 @@ careers model =
             [ text "Join our team of committed teachers, and help save our families" ]
         , row [ width fill, spaceEvenly ]
             [ column [ width (fill |> maximum 600), padding 35, spacing 25, Back.color darkGrey, Border.width 5, Border.rounded 10, Border.color darkerGrey ]
-                [ input_form SetName model.name "Enter your name..." "Name"
-                , input_form SetEmail model.email "Enter your email..." "Email"
-                , input_multi SetOther model.other "Any other information you'd like..." "Extra Info"
-                , Input.button
-                    [ padding 15, Border.width 5, Border.rounded 10, Border.color darkerGrey ]
-                    { onPress = Just ResumeRequested
-                    , label = text "Upload Resume"
-                    }
+                [ input_form SetName model.name "Enter your name..." "Name (Required)"
+                , email_form SetEmail model.email "Enter your email..." "Email (Required)"
+                , input_multi SetOther model.other "Any other information you'd like..." "Extra Info (Optional)"
+                , el [ centerX, width (px 450), Border.color lightGreen, Border.width 2, Border.rounded 4 ] none
+                , row [ width fill, spacing 50, centerX ]
+                    [ Input.button
+                        [ centerX, Font.center, width (px 200), padding 15, Border.width 5, Border.rounded 10, Border.color darkerGrey, below <| selectedFile model.resName model.resume ]
+                        { onPress = Just ResumeRequested
+                        , label = text "Upload Resume"
+                        }
+                    , Input.button
+                        [ centerX, Font.center, width (px 200), padding 15, Border.width 5, Border.rounded 10, Border.color darkerGrey, below <| submitMessage model.error ]
+                        { onPress = Just Upload
+                        , label = text "Submit Form"
+                        }
+                    ]
+                , hide 0
                 ]
             ]
         ]
