@@ -100,10 +100,18 @@ type Msg
     | Uploaded (Result Http.Error String)
 
 
-upload : File.File -> Cmd Msg
-upload file =
+upload : File.File -> String -> String -> String -> Cmd Msg
+upload file name email other =
+    let
+        url =
+            if other == "" then
+                "http://127.0.0.1:8000/new_resume" ++ "/" ++ name ++ "/" ++ email ++ "/" ++ "!"
+
+            else
+                "http://127.0.0.1:8000/new_resume" ++ "/" ++ name ++ "/" ++ email ++ "/" ++ other
+    in
     Http.post
-        { url = "http://127.0.0.1:8000/new_resume"
+        { url = url
         , body = Http.fileBody file
         , expect = Http.expectString Uploaded
         }
@@ -162,7 +170,7 @@ update msg model =
             in
             case ( validForm, model.resume ) of
                 ( True, Just resume ) ->
-                    ( model, upload resume )
+                    ( model, upload resume model.name model.email model.other )
 
                 _ ->
                     ( { model | error = Just True }, Cmd.none )
