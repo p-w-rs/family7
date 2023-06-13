@@ -7,9 +7,18 @@
 use std::path::{Path, PathBuf};
 use rocket::fs::{NamedFile, TempFile};
 use rocket::response::status;
+
 use rocket::http::Header;
 use rocket::{Request, Response};
 use rocket::fairing::{Fairing, Info, Kind};
+
+//use rocket_db_pools::{sqlx, Database};
+//use rocket_db_pools::Connection;
+//use rocket_db_pools::sqlx::Row;
+
+//#[derive(Database)]
+//#[database("postgres_logs")]
+//struct Logs(sqlx::PgPool);
 
 pub struct Cors;
 
@@ -36,6 +45,16 @@ impl Fairing for Cors {
 #[get("/")]
 async fn index() -> Option<NamedFile> {
     NamedFile::open(Path::new("./static/index.html")).await.ok()
+}
+
+#[get("/admin")]
+async fn admin() -> Option<NamedFile> {
+    NamedFile::open(Path::new("./static/admin.html")).await.ok()
+}
+
+#[get("/teachers")]
+async fn teachers() -> Option<NamedFile> {
+    NamedFile::open(Path::new("./static/teachers.html")).await.ok()
 }
 
 #[get("/<_..>")]
@@ -68,5 +87,5 @@ async fn drop_candidate(id: u64) -> status::Accepted<String> {
 
 #[launch]
 fn rocket() -> _ {
-    rocket::build().attach(Cors).mount("/", routes![index, index_route, files, assets, new_candidate])
+    rocket::build().attach(Cors).mount("/", routes![index, admin, teachers, index_route, files, assets, new_candidate, drop_candidate])
 }

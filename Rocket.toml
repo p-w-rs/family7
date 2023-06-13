@@ -1,3 +1,15 @@
+[dependencies.sqlx]
+version = "0.6.2"
+default-features = true
+
 [dependencies.rocket_db_pools]
 version = "=0.1.0-rc.3"
-features = ["deadpool_postgres"]
+features = ["sqlx_postgres"]
+
+#[default.databases.postgres_logs]
+#url = "/.data/pgsql/data/???"
+# this is the path where I called dbinit and start the database via pg_ctl -D ./ -l logfile start
+
+#[default.databases.db_name]
+#url = "postgres"
+# this is the dbname name I connect to via commandline
